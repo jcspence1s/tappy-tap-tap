@@ -135,3 +135,51 @@ def reflect(x, y):
     x1 = x
     y1 = x * math.sin(2 * theta) - y * math.cos(2 * theta)
     return [x1, y1]
+
+easing_func = {
+        'linear': lambda x: x, 
+        'easeInQuad': lambda x: x**2,
+        'easeOutQuad': lambda x: x*(2-x),
+        'easeInOutQuad': lambda x: 2*(x**2) if x < .5 else -1+(4-2*x)*x,
+        'easeInCubic': lambda x: x**3,
+        'easeOutCubic': lambda x: (--x)*(x**2)+1,
+        'easeInOutCubic': lambda x: 4*x**3 if x < .5 else (x-1)*(2*x-2)*(2*x)+1,
+        'easeInQuart': lambda x: x**4,
+        'easeOutQuart': lambda x: 1-(--x)*(x**3),
+        'easeInOutQuart': lambda x: 8*(x**4) if x < .5 else 1-8*(--x)*x**3,
+        'easeInQuint': lambda x: x**5,
+        'easeOutQuint': lambda x: 1+(--x)*x**4,
+        'easeInOutQuint': lambda x: 16*(x**5) if x < .5 else 1+16*(--x)*x**4
+}
+        
+def directionVector(pointA, pointB):
+    vector = [ pointB[0] - pointA[0],
+            pointB[1] - pointA[1],
+            pointB[2] - pointA[2]]
+    return vector
+
+def parametricEquation(pointA, pointB):
+    dv = directionVector(pointA, pointB)
+    def equation(x):
+          return [ pointA[0] + dv[0]*x,
+                   pointA[1] + dv[1]*x,
+                   pointA[2] + dv[2]*x]
+    return equation
+
+def getPoints(pointA, pointB, numberOfSteps, easingType):
+    points = list()
+    point = parametricEquation(pointA, pointB)
+    easingFunction = easing_func[easingType]
+
+    for i in range(numberOfSteps):
+        tmp = easingFunction(i/numberOfSteps)
+        points.append(point(tmp))
+
+    return points
+
+def test_move(pointA, pointB, numberOfSteps, easingType):
+    points = getPoints(pointA, pointB, numberOfSteps, easingType)
+    for point in points:
+        moveTo(point[0], point[1], point[2])
+        print(point)
+
