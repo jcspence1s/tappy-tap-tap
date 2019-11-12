@@ -13,7 +13,29 @@ cur_loc = [0, 0, -100]
 numberOfSteps = 10
 
 corners = [moveTo(40, 40, -175), moveTo(-13, 50, -175), moveTo(0, 0, -175), moveTo(13, -50, -175), moveTo(-40, -35, -175), moveTo(0, 0, -175), moveTo(0, 0, -135)]
+corner_points = ['center', 'top_left', 'top_right', 'bot_left', 'bot_right']
 
+class Device():
+    def __init__(self):
+        self.points = {'top_left': (0, 0, 0),
+                'top_right': (0, 0, 0),
+                'bot_left': (0, 0, 0),
+                'bot_right': (0, 0, 0),
+                'center': (0, 0, 0)}
+
+    def __str__(self):
+        out = '++++CONFIG++++\n'
+        out += '{}: {}\n'.format('center', self.points['center'])
+        out += '{}: {}\n'.format('top_left', self.points['top_left'])
+        out += '{}: {}\n'.format('top_right', self.points['top_right'])
+        out += '{}: {}\n'.format('bot_left', self.points['bot_left'])
+        out += '{}: {}\n'.format('bot_right', self.points['bot_right'])
+        return out
+
+    def set_point(self, where, cur_point):
+       self.points[where] = tuple(cur_point) 
+
+phone = Device()
 
 def setup():
     board.servo_config(SERVO_PIN1)
@@ -82,11 +104,13 @@ def move_y_right(event=None):
     new_loc[0] += 1
     move_axis(new_loc)
 
-def drop_point(event=None):
-    print("Cur Loc: {} {} {}".format(cur_loc[0], cur_loc[1], cur_loc[2]))
+def drop_point(eff, device):
+    global phone
+    cur_point = corner_points.pop(0)
+    print("{}: {} {} {}".format(cur_point, cur_loc[0], cur_loc[1], cur_loc[2]))
+    phone.points[cur_point] = cur_loc
 
 def move_axis(new_loc):
-    print("moving to {} {} {}".format(new_loc[0], new_loc[1], new_loc[2]))
     global cur_loc, numberOfSteps
     points = getPoints(cur_loc, [new_loc[0], new_loc[1], new_loc[2]], numberOfSteps, 'easeInQuad')
     for point in points:
@@ -137,6 +161,7 @@ def loop(cur_loc):
         board.analog_write(SERVO_PIN3, int(coords[3]))
     
 def main(cur_loc, numberOfSteps):
+    global phone
     root = Tk() 
     x = IntVar()
     y = IntVar() 
@@ -205,6 +230,19 @@ def main(cur_loc, numberOfSteps):
     configure_button = Button(root, text="configure", command=configure)
     configure_button.pack()
 
+
+    output = Text(root, height=6, width=30)
+
+    def show_config():
+        output.delete("1.0", "end")
+        output.insert(END, phone.__str__())
+
+
+    print_button = Button(root, text="Print Config", command=show_config)
+
+    print_button.pack()
+    output.pack()
+
     label = Label(root)
     label.pack()
 
@@ -224,7 +262,8 @@ def configure():
     config.bind('<Down>', move_x_down)
     config.bind('<Left>', move_y_left)
     config.bind('<Right>', move_y_right)
-    config.bind('<Control_R>', drop_point)
+    global phone
+    config.bind('<Control_R>', lambda eff: drop_point(None, phone))
     config.bind('<Shift-Up>', move_z_up)
     config.bind('<Shift-Down>', move_z_down)
     config.bind('<Return>', tap_config)
