@@ -1,21 +1,15 @@
 #!/usr/bin/python
 from pymata_aio.pymata3 import PyMata3
-from ik import moveTo, test_move, getPoints
-from tkinter import *
-import keyboard 
-board = PyMata3()
+from ik import getPoints, reflect, rotate, inverse
+import curses
+
 SERVO_PIN1 = 9  # Back Right
 SERVO_PIN2 = 10 # Front
 SERVO_PIN3 = 11 # Back Left 
 SERVO_POWER = 7
 
-cur_loc = [0, 0, -100]
-numberOfSteps = 10
 
-corners = [moveTo(40, 40, -175), moveTo(-13, 50, -175), moveTo(0, 0, -175), moveTo(13, -50, -175), moveTo(-40, -35, -175), moveTo(0, 0, -175), moveTo(0, 0, -135)]
-corner_points = ['center', 'top_left', 'top_right', 'bot_left', 'bot_right']
-
-class Device():
+class Phone():
     def __init__(self):
         self.points = {'top_left': (0, 0, 0),
                 'top_right': (0, 0, 0),
@@ -35,244 +29,152 @@ class Device():
     def set_point(self, where, cur_point):
        self.points[where] = tuple(cur_point) 
 
-phone = Device()
+class Servo():
+    def __init__(self, name, board, pin):
+        self.board = board
+        self.board.servo_config(pin)
+        self.pin = pin
+        self.name = name
+        self.angle = 0
+        board.analog_write(self.pin, self.angle)
 
-def setup():
-    board.servo_config(SERVO_PIN1)
-    board.servo_config(SERVO_PIN2)
-    board.servo_config(SERVO_PIN3)
-    board.servo_config(SERVO_POWER)
-    board.analog_write(SERVO_PIN1, 0)
-    board.analog_write(SERVO_PIN2, 0)
-    board.analog_write(SERVO_PIN3, 0)
-    board.analog_write(SERVO_POWER, 0)
+    def set_angle(self, angle):
+        self.angle = int(angle)
+        self.board.analog_write(self.pin, self.angle)
 
-def tap_config(event=None):
-    global cur_loc, numberOfSteps
-    new_loc = cur_loc
-    points = getPoints(cur_loc, [new_loc[0], new_loc[1], new_loc[2] - 10], 2, 'linear')
-    origin = points[::-1]
-    for point in points:
-        coords = moveTo(*point)
-        
-        if coords[0] is 1:
-            print("Error in move")
-            return
-        cur_loc = point
-        board.analog_write(SERVO_PIN1, int(coords[2]))
-        board.analog_write(SERVO_PIN2, int(coords[1]))
-        board.analog_write(SERVO_PIN3, int(coords[3]))
-    board.sleep(.1)
-    for point in origin:
-        coords = moveTo(*point)
-        
-        if coords[0] is 1:
-            print("Error in move")
-            return
-        cur_loc = point
-        board.analog_write(SERVO_PIN1, int(coords[2]))
-        board.analog_write(SERVO_PIN2, int(coords[1]))
-        board.analog_write(SERVO_PIN3, int(coords[3]))
-
-def move_z_up(event=None):
-    new_loc = cur_loc
-    new_loc[2] += 1
-    move_axis(new_loc)
-
-def move_z_down(event=None):
-    new_loc = cur_loc
-    new_loc[2] -= 1
-    move_axis(new_loc)
-
-def move_x_up(event=None):
-    new_loc = cur_loc
-    new_loc[1] += 1
-    move_axis(new_loc)
-
-def move_x_down(event=None):
-    new_loc = cur_loc
-    new_loc[1] -= 1
-    move_axis(new_loc)
-
-def move_y_left(event=None):
-    new_loc = cur_loc
-    new_loc[0] -= 1 
-    move_axis(new_loc)
-
-def move_y_right(event=None):
-    new_loc = cur_loc
-    new_loc[0] += 1
-    move_axis(new_loc)
-
-def drop_point(eff, device):
-    global phone
-    cur_point = corner_points.pop(0)
-    print("{}: {} {} {}".format(cur_point, cur_loc[0], cur_loc[1], cur_loc[2]))
-    phone.points[cur_point] = cur_loc
-
-def move_axis(new_loc):
-    global cur_loc, numberOfSteps
-    points = getPoints(cur_loc, [new_loc[0], new_loc[1], new_loc[2]], numberOfSteps, 'easeInQuad')
-    for point in points:
-        coords = moveTo(*point)
-        board.analog_write(SERVO_PIN1, int(coords[2]))
-        board.analog_write(SERVO_PIN2, int(coords[1]))
-        board.analog_write(SERVO_PIN3, int(coords[3]))
-    cur_loc = point
-
-
-def loop(cur_loc):
-    choice = input("X, Y, Z or cross or POWER: ")
-    if "cross" == choice:
-        for point in corners:
-            board.analog_write(SERVO_PIN1, int(point[2]))
-            board.analog_write(SERVO_PIN2, int(point[3]))
-            board.analog_write(SERVO_PIN3, int(point[1])) 
-            board.sleep(.25)
-        return
-    elif "POWER" == choice:
-        board.analog_write(SERVO_POWER, 100)  #Fine tune
-        board.sleep(2)
-        board.analog_write(SERVO_POWER, 0)
-        return
-
-    try:
-        x, y, z = choice.split()
-    except:
-        print("error")
-        return
-    x = int(x)
-    y = int(y)
-    z = int(z)
-    if not -40 <= x <= 40:
-        print("X out of range")
-        return
-    if not -50 <= y <= 50:
-        print("Y out of range")
-        return
-    print("You entered X:{} Y:{} Z:{}".format(x, y, z))
-    points = getPoints(cur_loc, [x, y, z], numberOfSteps, 'easeInQuad')
-    for point in points:
-        print("{}->{}".format(cur_loc, point))
-        cur_loc = point
-        coords = moveTo(*point)
-        board.analog_write(SERVO_PIN1, int(coords[2]))
-        board.analog_write(SERVO_PIN2, int(coords[1]))
-        board.analog_write(SERVO_PIN3, int(coords[3]))
+class Robot():
+    def map(self, num, in_min, in_max, out_min, out_max):
+        return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
     
-def main(cur_loc, numberOfSteps):
-    global phone
-    root = Tk() 
-    x = IntVar()
-    y = IntVar() 
-    z = IntVar()
-
-    x_scale = Scale(root, orient=HORIZONTAL, from_=-50, to=50, variable = x)
-    y_scale = Scale(root, orient=HORIZONTAL, from_=-70, to=60, variable = y)
-    z_scale = Scale(root, orient=HORIZONTAL, from_=-160, to=-190, variable = z)
-
-    x_scale.pack(anchor=CENTER)
-    y_scale.pack(anchor=CENTER)
-    z_scale.pack(anchor=CENTER)
-
-    def get_and_move():
-        global cur_loc, numberOfSteps,SERVO_PIN1, SERVO_PIN2, SERVO_PIN3, board
-        new_x = x.get()
-        new_y = y.get()
-        new_z = z.get()
-        points = getPoints(cur_loc, [new_x, new_y, new_z], numberOfSteps, 'linear')
+    def move_to(self, x, y, z):
+        points = getPoints(list(self.cur_loc.values()), [x, y, z], self.num_steps, 'easeInQuad')
         for point in points:
-            coords = moveTo(*point)
-            
-            print(point.__str__() + ":" + coords.__str__())
-            if coords[0] is 1:
-                print("Error in move")
-                return
-            cur_loc = point
-            print(coords)
-            board.analog_write(SERVO_PIN1, int(coords[2]))
-            board.analog_write(SERVO_PIN2, int(coords[1]))
-            board.analog_write(SERVO_PIN3, int(coords[3]))
+            coords = self._move_to(*point)
 
-    def tap():
-        global cur_loc, numberOfSteps
-        new_x = x.get()
-        new_y = y.get()
-        new_z = z.get()
-        points = getPoints(cur_loc, [new_x, new_y, new_z - 10], 2, 'linear')
-        origin = points[::-1]
-        for point in points:
-            coords = moveTo(*point)
-            
-            if coords[0] is 1:
-                print("Error in move")
-                return
-            cur_loc = point
-            board.analog_write(SERVO_PIN1, int(coords[2]))
-            board.analog_write(SERVO_PIN2, int(coords[1]))
-            board.analog_write(SERVO_PIN3, int(coords[3]))
-        board.sleep(.1)
-        for point in origin:
-            coords = moveTo(*point)
-            
-            if coords[0] is 1:
-                print("Error in move")
-                return
-            cur_loc = point
-            board.analog_write(SERVO_PIN1, int(coords[2]))
-            board.analog_write(SERVO_PIN2, int(coords[1]))
-            board.analog_write(SERVO_PIN3, int(coords[3]))
+    def move_up(self):
+        self.cur_loc['x'] += 1
+        self.cur_loc['y'] -= 1
+        self.move_to(*list(self.cur_loc.values()))
 
-    move_button = Button(root, text="Move to pos", command=get_and_move)
-    tap_button = Button(root, text="TAP!!!!", command=tap)
-    move_button.pack(anchor=CENTER)
-    tap_button.pack(anchor=CENTER)
-    configure_button = Button(root, text="configure", command=configure)
-    configure_button.pack()
+    def move_down(self):
+        self.cur_loc['x'] -= 1
+        self.cur_loc['y'] += 1
+        self.move_to(*list(self.cur_loc.values()))
 
+    def move_left(self):
+        self.cur_loc['x'] -= 1
+        self.cur_loc['y'] -= 1
+        self.move_to(*list(self.cur_loc.values()))
 
-    output = Text(root, height=6, width=30)
+    def move_right(self):
+        self.cur_loc['x'] += 1
+        self.cur_loc['y'] += 1
+        self.move_to(*list(self.cur_loc.values()))
 
-    def show_config():
-        output.delete("1.0", "end")
-        output.insert(END, phone.__str__())
-
-
-    print_button = Button(root, text="Print Config", command=show_config)
-
-    print_button.pack()
-    output.pack()
-
-    label = Label(root)
-    label.pack()
-
-    root.mainloop()
-
-def configure():
-
-
-    config = Tk()
-    up = Button(config, text='up', command=move_x_up, width=15).grid(row=0, column=1)
-    down = Button(config, text='down', command=move_x_down, width=15).grid(row=2, column=1)
-    left = Button(config, text='left', command=move_y_left, width=15).grid(row=1, column=0)
-    right = Button(config, text='right', command=move_y_right, width=15).grid(row=1, column=2)
-    pin = Button(config, text='Pin', command=drop_point, width=15).grid(row=1, column=1)
-
-    config.bind('<Up>', move_x_up)
-    config.bind('<Down>', move_x_down)
-    config.bind('<Left>', move_y_left)
-    config.bind('<Right>', move_y_right)
-    global phone
-    config.bind('<Control_R>', lambda eff: drop_point(None, phone))
-    config.bind('<Shift-Up>', move_z_up)
-    config.bind('<Shift-Down>', move_z_down)
-    config.bind('<Return>', tap_config)
-
-    config.mainloop()
+    def move_z_up(self): 
+        self.cur_loc['z'] += 1
+        self.move_to(*list(self.cur_loc.values()))
     
+    def move_z_down(self): 
+        self.cur_loc['z'] -= 1
+        self.move_to(*list(self.cur_loc.values()))
+
+    def _move_to(self, x, y, z):
+        #points = getPoints(self.cur_loc, [x, y, z], self.num_steps, 'linear')
+        self.cur_loc['x'] = x
+        self.cur_loc['y'] = y
+        self.cur_loc['z'] = z 
+        reflected = reflect(x, y)
+        rotated = rotate(reflected[0], reflected[1])
+        angles = inverse(rotated[0], rotated[1], z)
+        
+        tmp1 = self.map(angles[1], 0, 90, 19, 101)
+        tmp2 = self.map(angles[2], 0, 90, 19, 101)
+        tmp3 = self.map(angles[3], 0, 90, 19, 101)
+
+        self.s1.set_angle(tmp1)
+        self.s2.set_angle(tmp2)
+        self.s3.set_angle(tmp3)
+        
+    def add_node(self):
+        self.script.append(list(self.cur_loc.values()))
+
+    def play_script(self):
+        for node in self.script:
+            self.cur_loc['x'] = node[0]
+            self.cur_loc['y'] = node[1]
+            self.cur_loc['z'] = node[2]
+            self.move_to(*node)
+            self.board.sleep(1)
+
+    def __str__(self):
+        out = "+++++NODES+++++\n"
+        for node in self.script:
+            out += "{} {} {}\n".format(node[0], node[1], node[2])
+        for i in range(25):
+            out += "                                    \n"
+        return out
+
+    def __init__(self, name):
+        self.name = name
+        self.board = PyMata3()
+        self.cur_loc = {'x': 0,'y': 0, 'z': -140}
+        self.num_steps = 5
+        self.s1 = Servo("{} S1".format(self.name), self.board, SERVO_PIN1)
+        self.s2 = Servo("{} S2".format(self.name), self.board, SERVO_PIN2)
+        self.s3 = Servo("{} S3".format(self.name), self.board, SERVO_PIN3)
+        self.move_to(0, 0, -140)
+        self.power = Servo("{} PW".format(self.name), self.board, SERVO_POWER)
+        self.script = list()
+        self.script.append(list(self.cur_loc.values()))
+
+def main(stdscr):
+    curses.mousemask(1)
+    stdscr.clear()
+    tappy = Robot("Tappy")
+    stdscr.refresh()
+    tapping = False
+    while True:
+        c = stdscr.getch()
+        out = "Key Pressed: {}\n".format(c)
+        if c == curses.KEY_UP:
+            tappy.move_up()
+        elif c == curses.KEY_DOWN:
+            tappy.move_down()
+        elif c == curses.KEY_LEFT:
+            tappy.move_left()
+        elif c == curses.KEY_RIGHT:
+            tappy.move_right()
+        elif c == 336: # shift - down arrow
+            tappy.move_z_down()
+        elif c == 337: # shift - up arrow
+            tappy.move_z_up()
+        elif c == 115 and not tapping: # s
+            for i in range(5):
+                tappy.move_z_down()
+            tapping = True
+        elif c == 115:
+            for i in range(5):
+                tappy.move_z_up()
+            tapping = False
+        elif c == curses.KEY_MOUSE:
+            for i in range(5):
+                tappy.move_z_down()
+            for i in range(5):
+                tappy.move_z_up()
+        elif c == 114:
+            tappy.add_node()
+        elif c == 119:
+            tappy.play_script()
+        elif c == 82:
+            tappy.script = list()
+            tappy.move_to(0, 0, -140)
+            tappy.script.append([0, 0, -140])
+
+        nodes = tappy.__str__()
+
+        stdscr.addstr(0, 0, out)
+        stdscr.addstr(20, 0, nodes)
 
 if __name__ == "__main__":
-    setup()
-    main(cur_loc, numberOfSteps)
-#    while True:
-#        loop(cur_loc)
+    curses.wrapper(main)
