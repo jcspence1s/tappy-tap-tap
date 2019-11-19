@@ -2,6 +2,7 @@
 from pymata_aio.pymata3 import PyMata3
 from ik import getPoints, reflect, rotate, inverse
 import curses
+import threading
 
 SERVO_PIN1 = 9  # Back Right
 SERVO_PIN2 = 10 # Front
@@ -96,23 +97,39 @@ class Robot():
         self.s2.set_angle(tmp2)
         self.s3.set_angle(tmp3)
         
-    def add_node(self):
-        self.script.append(list(self.cur_loc.values()))
+    def add_node(self, action):
+        if action is 'tap':
+            self.script.append([list(self.cur_loc.values()), 'tap'])
+        elif action is 'swipe_up':
+            self.script.append([list(self.cur_loc.values()), 'up'])
+        elif action is 'swipe_down':
+            self.script.append([list(self.cur_loc.values()), 'down'])
+        elif action is 'swipe_left':
+            self.script.append([list(self.cur_loc.values()), 'left'])
+        elif action is 'swipe_right':
+            self.script.append([list(self.cur_loc.values()), 'right'])
+        else:
+            self.script.append([list(self.cur_loc.values()), None])
 
     def play_script(self):
         for node in self.script:
-            self.cur_loc['x'] = node[0]
-            self.cur_loc['y'] = node[1]
-            self.cur_loc['z'] = node[2]
-            self.move_to(*node)
-            self.board.sleep(1)
+            self.cur_loc['x'] = node[0][0]
+            self.cur_loc['y'] = node[0][1]
+            self.cur_loc['z'] = node[0][2]
+            self.move_to(*node[0])
+            self.board.sleep(.25)
+            if node[1] is 'tap':
+                self.tap()
+            elif node[1] is None:
+                pass
+            else:
+                self.swipe(node[1])
+            self.board.sleep(.25)
 
     def __str__(self):
         out = "+++++NODES+++++\n"
         for node in self.script:
-            out += "{} {} {}\n".format(node[0], node[1], node[2])
-        for i in range(25):
-            out += "                                    \n"
+            out += "{} {} {} - {}\n".format(node[0][0], node[0][1], node[0][2], node[1])
         return out
 
     def __init__(self, name):
@@ -124,9 +141,45 @@ class Robot():
         self.s2 = Servo("{} S2".format(self.name), self.board, SERVO_PIN2)
         self.s3 = Servo("{} S3".format(self.name), self.board, SERVO_PIN3)
         self.move_to(0, 0, -140)
-        self.power = Servo("{} PW".format(self.name), self.board, SERVO_POWER)
+        self.s_power = Servo("{} PW".format(self.name), self.board, SERVO_POWER)
         self.script = list()
-        self.script.append(list(self.cur_loc.values()))
+        self.script.append([list(self.cur_loc.values()), None])
+
+    def swipe(self, direction):
+        options = {
+            'left': [self.move_left, self.move_right],
+            'right': [self.move_right, self.move_left],
+            'up': [self.move_up, self.move_down],
+            'down': [self.move_down, self.move_up]
+        }
+        for i in range(8):
+            self.move_z_down()
+        tapping = True
+        for x in range(30):
+            options[direction][0]()
+        for i in range(8):
+            self.move_z_up()
+        for x in range(30):
+            options[direction][1]()
+        tapping = False
+
+    def tap(self):
+        for i in range(8):
+            self.move_z_down()
+        for i in range(8):
+            self.move_z_up()
+
+    def power(self, action):
+        self.s_power.set_angle(110)
+        if action is 'hold':
+            self.board.sleep(5)
+            self.swipe('right')
+            self.board.sleep(2)
+        else:
+            self.board.sleep(.5)
+        self.s_power.set_angle(0)
+
+
 
 def main(stdscr):
     curses.mousemask(1)
@@ -157,23 +210,52 @@ def main(stdscr):
             for i in range(5):
                 tappy.move_z_up()
             tapping = False
-        elif c == curses.KEY_MOUSE:
-            for i in range(5):
-                tappy.move_z_down()
-            for i in range(5):
-                tappy.move_z_up()
         elif c == 114:
-            tappy.add_node()
+            tappy.add_node('tap')
         elif c == 119:
             tappy.play_script()
         elif c == 82:
             tappy.script = list()
             tappy.move_to(0, 0, -140)
-            tappy.script.append([0, 0, -140])
+            tappy.script.append([[0, 0, -140], None])
+        elif c == 564: # alt + up
+            #swipe up
+            tappy.swipe('up')
+        elif c == 523: # alt + down
+            tappy.swipe('down')
+        elif c == 543: # alt + left
+            tappy.swipe('left')
+            #swipe left
+        elif c == 558: # alt + right
+            tappy.swipe('right')
+            #swipe right
+        elif c == 566: # ctrl + up
+            tappy.add_node('swipe_up')
+        elif c == 525: # ctrl + down
+            tappy.add_node('swipe_down')
+        elif c == 545: # ctrl + left
+            tappy.add_node('swipe_left')
+        elif c == 560: # ctrl + right
+            tappy.add_node('swipe_right')
+        elif c == 112: # pOWAH
+            tappy.power('tap')
+        elif c == 80: # POWAH
+            tappy.power('hold')
 
         nodes = tappy.__str__()
 
+        controls = '''Arrows: Movement
+Shift+Up/Shift+Down: Z movement
+s: Tap and hold(Toggle)
+Mouse Click: Tap(Non-toggle)
+r: Record current position to tap script
+w: Replay record script
+Shift+r: Clear script
+Alt + Arrow: Swipe in arrow direction
+ctrl + Arrow: Script swipe'''
+        stdscr.clear()
         stdscr.addstr(0, 0, out)
+        stdscr.addstr(1, 0, controls)
         stdscr.addstr(20, 0, nodes)
 
 if __name__ == "__main__":
