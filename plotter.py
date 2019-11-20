@@ -3,11 +3,14 @@ from pymata_aio.pymata3 import PyMata3
 from ik import getPoints, reflect, rotate, inverse
 import curses
 import threading
+from time import sleep
 
 SERVO_PIN1 = 9  # Back Right
 SERVO_PIN2 = 10 # Front
 SERVO_PIN3 = 11 # Back Left 
 SERVO_POWER = 7
+
+movement = 2
 
 
 class Phone():
@@ -44,6 +47,7 @@ class Servo():
         self.board.analog_write(self.pin, self.angle)
 
 class Robot():
+
     def map(self, num, in_min, in_max, out_min, out_max):
         return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
     
@@ -52,32 +56,51 @@ class Robot():
         for point in points:
             coords = self._move_to(*point)
 
+    def move(self, direction):
+        funcs = {
+            'up': self.move_up,
+            'down': self.move_down,
+            'left': self.move_left,
+            'right': self.move_right
+        }
+        funcs[direction]()
+
     def move_up(self):
-        self.cur_loc['x'] += 1
-        self.cur_loc['y'] -= 1
+        global movement
+        if self.cur_loc['x'] < 0:
+            self.cur_loc['z'] += .15
+        self.cur_loc['x'] += movement
+        self.cur_loc['y'] -= movement
         self.move_to(*list(self.cur_loc.values()))
 
     def move_down(self):
-        self.cur_loc['x'] -= 1
-        self.cur_loc['y'] += 1
+        global movement
+        if self.cur_loc['x'] < 0:
+            self.cur_loc['z'] -= .15
+        self.cur_loc['x'] -= movement
+        self.cur_loc['y'] += movement
         self.move_to(*list(self.cur_loc.values()))
 
     def move_left(self):
-        self.cur_loc['x'] -= 1
-        self.cur_loc['y'] -= 1
+        global movement
+        self.cur_loc['x'] -= movement
+        self.cur_loc['y'] -= movement
         self.move_to(*list(self.cur_loc.values()))
 
     def move_right(self):
-        self.cur_loc['x'] += 1
-        self.cur_loc['y'] += 1
+        global movement
+        self.cur_loc['x'] += movement
+        self.cur_loc['y'] += movement
         self.move_to(*list(self.cur_loc.values()))
 
     def move_z_up(self): 
-        self.cur_loc['z'] += 1
+        global movement
+        self.cur_loc['z'] += movement/2
         self.move_to(*list(self.cur_loc.values()))
     
     def move_z_down(self): 
-        self.cur_loc['z'] -= 1
+        global movement
+        self.cur_loc['z'] -= movement/2
         self.move_to(*list(self.cur_loc.values()))
 
     def _move_to(self, x, y, z):
@@ -146,22 +169,26 @@ class Robot():
         self.script.append([list(self.cur_loc.values()), None])
 
     def swipe(self, direction):
+        global movement
         options = {
             'left': [self.move_left, self.move_right],
             'right': [self.move_right, self.move_left],
             'up': [self.move_up, self.move_down],
             'down': [self.move_down, self.move_up]
         }
-        for i in range(8):
+        mvmnt = movement
+        movement = movement/2
+        for i in range(16):
             self.move_z_down()
         tapping = True
         for x in range(30):
             options[direction][0]()
-        for i in range(8):
+        for i in range(16):
             self.move_z_up()
         for x in range(30):
             options[direction][1]()
         tapping = False
+        movement = mvmnt
 
     def tap(self):
         for i in range(8):
@@ -172,11 +199,11 @@ class Robot():
     def power(self, action):
         self.s_power.set_angle(110)
         if action is 'hold':
-            self.board.sleep(5)
+            sleep(5)
             self.swipe('right')
-            self.board.sleep(2)
+            sleep(1)
         else:
-            self.board.sleep(.5)
+            sleep(.5)
         self.s_power.set_angle(0)
 
 
