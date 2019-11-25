@@ -64,6 +64,7 @@ class Robot():
             'right': self.move_right
         }
         funcs[direction]()
+        print("X: {} Y: {} Z:{}".format(*self.cur_loc.values()))
 
     def move_up(self):
         global movement

@@ -1,12 +1,32 @@
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, Response
 from plotter import *
+from imutils.video import VideoStream
+import imutils
+import cv2
 
 app = Flask(__name__)
 tappy = Robot("Tappy")
 
+# src is the video device number from /dev/video#
+stream = VideoStream(src=1).start()
+
+def jpg_encode():
+    global stream
+    while True:
+        frame = stream.read()
+        frame = imutils.resize(frame, width=400)
+        (flag, encodedImage) = cv2.imencode(".jpg", frame)
+        if not flag:
+            continue
+        yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n'+ bytearray(encodedImage) + b'\r\n')
+
 @app.route('/')
-def hello_world():
+def index():
     return render_template('index.html')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(jpg_encode(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/<path:path>')
 def send_js(path):
