@@ -1,0 +1,11 @@
+Click==7.0
+Flask==1.1.1
+imutils==0.5.3
+itsdangerous==1.1.0
+Jinja2==2.10.3
+MarkupSafe==1.1.1
+opencv-python==4.1.2.30
+pymata-aio==2.31
+pyserial==3.4
+websockets==8.1
+Werkzeug==0.16.0
