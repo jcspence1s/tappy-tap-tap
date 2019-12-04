@@ -10,7 +10,8 @@ tappy = Robot("Tappy")
 padlock = threading.Lock()
 
 # src is the video device number from /dev/video#
-stream = VideoStream(src=2).start()
+stream = VideoStream(src=2, resolution=(1280, 720))
+stream.start()
 
 def jpg_encode():
     global stream
