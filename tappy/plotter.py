@@ -194,9 +194,9 @@ class Robot():
         movement = mvmnt
 
     def tap(self):
-        for i in range(8):
+        for i in range(10):
             self.move_z_down()
-        for i in range(8):
+        for i in range(10):
             self.move_z_up()
 
     def power(self, action):
