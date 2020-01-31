@@ -12,7 +12,6 @@ SERVO_POWER = 7
 
 movement = 2
 
-
 class Phone():
     def __init__(self):
         self.points = {'top_left': (0, 0, 0),
@@ -208,8 +207,6 @@ class Robot():
         else:
             sleep(.5)
         self.s_power.set_angle(0)
-
-
 
 def main(stdscr):
     curses.mousemask(1)

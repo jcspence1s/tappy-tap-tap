@@ -136,4 +136,6 @@ def tap_up():
     return "test"
 
 if __name__ == "__main__":
+    print("test")
     app.run(host='0.0.0.0')
+    print("test2")
